@@ -77,9 +77,10 @@ def run(
     max_steps: Annotated[int, typer.Option("--max-steps", help="Maximum execution steps")] = 25,
     max_budget: Annotated[float, typer.Option("--max-budget", help="Maximum USD budget")] = 1.0,
     workspace: Annotated[str, typer.Option("--workspace", "-w", help="Workspace path")] = ".harness/workspace",
+    interactive: Annotated[bool, typer.Option("--interactive", "-i", help="Enable Human-in-the-Loop approval")] = False,
 ):
     """Execute an autonomous agent goal inside a secure sandbox."""
-    console.print(Panel(f"[bold cyan]Goal:[/bold cyan] {goal}\n[bold]Sandbox:[/bold] {sandbox} | [bold]Provider:[/bold] {provider}", title="AgentHarness Run Initializing"))
+    console.print(Panel(f"[bold cyan]Goal:[/bold cyan] {goal}\n[bold]Sandbox:[/bold] {sandbox} | [bold]Provider:[/bold] {provider} | [bold]Interactive:[/bold] {interactive}", title="AgentHarness Run Initializing"))
 
     ws_path = Path(workspace).resolve()
     storage_path = Path(".harness/runs").resolve()
@@ -92,6 +93,9 @@ def run(
         sandbox=SandboxConfig(sandbox_type=SandboxType.PROCESS, workspace_dir=ws_path),
         guardrails=GuardrailConfig(max_steps=max_steps, max_budget_usd=max_budget),
     )
+
+    from .core.hitl import CLIInterventionHandler
+    hitl_handler = CLIInterventionHandler() if interactive else None
 
     def on_event(event_type: str, data: dict):
         if event_type == "step_started":
@@ -112,6 +116,7 @@ def run(
         provider=prov,
         config=config,
         event_callback=on_event,
+        hitl_handler=hitl_handler,
     )
 
     result = asyncio.run(loop.run())
@@ -241,3 +246,101 @@ def serve(
     server_app = create_app()
     console.print(f"[bold green]Starting AgentHarness Web Studio on http://{host}:{port}[/bold green]")
     uvicorn.run(server_app, host=host, port=port)
+
+
+@app.command()
+def export(
+    run_id: Annotated[str, typer.Argument(help="Run ID to export")],
+    output: Annotated[str, typer.Option("--output", "-o", help="Output HTML file path")] = "report.html",
+    storage: Annotated[str, typer.Option("--storage", help="Path to runs directory")] = ".harness/runs",
+):
+    """Export a run as a standalone portable HTML report with embedded Cytoscape.js DAG."""
+    storage_path = Path(storage).resolve()
+    dag = load_run(run_id, storage_path)
+    if not dag:
+        console.print(f"[red]Error: Run '{run_id}' not found.[/red]")
+        raise typer.Exit(code=1)
+
+    from .export.report import generate_html_report
+    out_path = Path(output).resolve()
+    generate_html_report(dag, out_path)
+    console.print(f"[bold green]Report exported successfully to: [cyan]{out_path}[/cyan][/bold green]")
+
+
+@app.command(name="eval")
+def run_eval(
+    suite_file: Annotated[str, typer.Argument(help="Path to YAML or JSON eval suite file")],
+    provider: Annotated[str, typer.Option("--provider", "-p", help="Provider: mock, anthropic, openai")] = "mock",
+    model: Annotated[str, typer.Option("--model", "-m", help="Model name identifier")] = "claude-3-7-sonnet",
+):
+    """Run an automated evaluation suite against declarative assertions."""
+    path = Path(suite_file).resolve()
+    if not path.exists():
+        console.print(f"[red]Error: Suite file '{suite_file}' not found.[/red]")
+        raise typer.Exit(code=1)
+
+    from .eval.models import EvalSuite
+    from .eval.runner import EvalRunner
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    suite = EvalSuite.model_validate(data)
+    prov = get_provider(provider, model)
+    runner = EvalRunner(provider=prov)
+
+    console.print(f"[bold cyan]Running Eval Suite: {suite.name} ({len(suite.cases)} test cases)...[/bold cyan]")
+    report = asyncio.run(runner.run_suite(suite))
+
+    table = Table(title=f"Eval Results: {report.suite_name}", show_header=True)
+    table.add_column("Case ID", style="cyan")
+    table.add_column("Status")
+    table.add_column("Steps")
+    table.add_column("Cost")
+    table.add_column("Details")
+
+    for r in report.results:
+        status = "[green]PASS[/green]" if r.passed else "[red]FAIL[/red]"
+        checks_summary = "; ".join(c.message for c in r.checks)
+        table.add_row(r.case_id, status, str(r.steps_taken), f"${r.cost_usd:.4f}", checks_summary)
+
+    console.print(table)
+    console.print(f"[bold]Summary:[/bold] {report.passed_cases}/{report.total_cases} passed in {report.total_duration_seconds:.2f}s (${report.total_cost_usd:.4f})")
+
+
+@app.command()
+def mcp_serve(
+    workspace: Annotated[str, typer.Option("--workspace", "-w", help="Workspace path")] = ".harness/workspace",
+):
+    """Start AgentHarness in MCP server mode over stdio."""
+    ws_path = Path(workspace).resolve()
+    sb = ProcessSandbox(workspace_dir=ws_path)
+    from .mcp.server import MCPServer
+    server = MCPServer(sandbox=sb)
+    asyncio.run(server.run_stdio())
+
+
+@app.command()
+def diff(
+    run_id: Annotated[str, typer.Argument(help="Run ID containing branches")],
+    storage: Annotated[str, typer.Option("--storage", help="Path to runs directory")] = ".harness/runs",
+):
+    """View colored diffs between branches in an agent run."""
+    storage_path = Path(storage).resolve()
+    dag = load_run(run_id, storage_path)
+    if not dag:
+        console.print(f"[red]Error: Run '{run_id}' not found.[/red]")
+        raise typer.Exit(code=1)
+
+    branches = dag.list_branches()
+    console.print(f"[bold]Available Branches in '{run_id}':[/bold] {branches}")
+    leaves = [n.id for n in dag.nodes_by_id.values() if dag.graph.out_degree(n.id) == 0]
+    if len(leaves) >= 2:
+        from .graph.diff import compare_branches
+        comparison = compare_branches(dag, leaves[0], leaves[1])
+        console.print(Panel(
+            f"Comparing {comparison.branch_a.branch_id} vs {comparison.branch_b.branch_id}\n"
+            f"Token Delta: {comparison.token_delta} | Cost Delta: ${comparison.cost_delta_usd:.4f}",
+            title="Branch Comparison",
+        ))
+    else:
+        console.print("[yellow]Run contains only a single linear branch.[/yellow]")
+

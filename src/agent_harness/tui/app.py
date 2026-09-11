@@ -51,9 +51,17 @@ class NodeDetailWidget(Static):
             f"[bold]Checkpoint ID:[/bold] {node.checkpoint_id or 'None'}",
             f"[bold]Token Usage:[/bold] {node.token_usage} | [bold]Cost:[/bold] ${node.cost_usd:.4f}",
             "",
-            "[bold yellow]Payload:[/bold yellow]",
+            "[bold yellow]Payload Data:[/bold yellow]",
             json.dumps(node.payload, indent=2),
         ]
+
+        if "output" in node.payload:
+            lines.extend([
+                "",
+                "[bold green]Tool Observation Output:[/bold green]",
+                node.payload["output"][:1000],
+            ])
+
         self.update("\n".join(lines))
 
 

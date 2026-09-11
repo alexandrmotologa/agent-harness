@@ -18,6 +18,7 @@ from .guardrails import (
     InfiniteLoopDetector,
     InfiniteLoopError,
 )
+from .hitl import ActionDecision, ApprovalPolicy, BaseInterventionHandler
 from .tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,8 @@ class AutonomousLoop:
         existing_dag: DecisionDAG | None = None,
         start_node_id: str | None = None,
         branch_id: str = "main",
+        hitl_handler: BaseInterventionHandler | None = None,
+        approval_policy: ApprovalPolicy | None = None,
     ):
         self.run_id = existing_dag.run_id if existing_dag else f"run_{uuid.uuid4().hex[:8]}"
         self.goal = goal
@@ -62,6 +65,8 @@ class AutonomousLoop:
         self.config = config or HarnessConfig()
         self.event_callback = event_callback
         self.branch_id = branch_id
+        self.hitl_handler = hitl_handler
+        self.approval_policy = approval_policy or ApprovalPolicy()
 
         # Setup Decision DAG
         self.dag = existing_dag or DecisionDAG(run_id=self.run_id, goal=self.goal)
@@ -244,19 +249,53 @@ class AutonomousLoop:
                     success = False
                     break
 
+                # Human-in-the-Loop Interception
+                target_arguments = tc.arguments
+                if self.hitl_handler and self.approval_policy.should_require_approval(tc.name, tc.arguments):
+                    self._emit("hitl_required", {"tool": tc.name, "arguments": tc.arguments})
+                    intervention = await self.hitl_handler.handle_intervention(
+                        tool_name=tc.name,
+                        arguments=tc.arguments,
+                        trigger_reason=f"Approval policy triggered for {tc.name}",
+                    )
+
+                    if intervention.decision == ActionDecision.DENY:
+                        denial_msg = f"[Action Denied by Operator]: {intervention.denial_reason or 'No reason specified'}"
+                        int_node = self.dag.create_child_node(
+                            node_type=NodeType.INTERVENTION,
+                            title=f"Human Denied: {tc.name}",
+                            payload={"tool_name": tc.name, "denial_reason": intervention.denial_reason},
+                            parent_id=self.current_parent_id,
+                            branch_id=self.branch_id,
+                        )
+                        self.current_parent_id = int_node.id
+                        self.context_mgr.add_message(role="tool", content=denial_msg, tool_call_id=tc.id, name=tc.name)
+                        self._emit("observation", {"tool": tc.name, "output": denial_msg})
+                        continue
+                    elif intervention.decision == ActionDecision.MODIFY and intervention.modified_arguments:
+                        target_arguments = intervention.modified_arguments
+                        int_node = self.dag.create_child_node(
+                            node_type=NodeType.INTERVENTION,
+                            title=f"Human Modified: {tc.name}",
+                            payload={"original": tc.arguments, "modified": target_arguments},
+                            parent_id=self.current_parent_id,
+                            branch_id=self.branch_id,
+                        )
+                        self.current_parent_id = int_node.id
+
                 # Create TOOL_CALL node in DAG
                 call_node = self.dag.create_child_node(
                     node_type=NodeType.TOOL_CALL,
                     title=f"Tool Call: {tc.name}",
-                    payload={"tool_name": tc.name, "arguments": tc.arguments, "call_id": tc.id},
+                    payload={"tool_name": tc.name, "arguments": target_arguments, "call_id": tc.id},
                     parent_id=self.current_parent_id,
                     branch_id=self.branch_id,
                 )
                 self.current_parent_id = call_node.id
-                self._emit("tool_call", {"tool": tc.name, "arguments": tc.arguments})
+                self._emit("tool_call", {"tool": tc.name, "arguments": target_arguments})
 
                 # Execute tool
-                tool_res = await self.tools.execute(tc.name, tc.arguments)
+                tool_res = await self.tools.execute(tc.name, target_arguments)
 
                 # Capture checkpoint if checkpoint manager is active
                 checkpoint_id = None

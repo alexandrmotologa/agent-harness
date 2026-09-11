@@ -82,6 +82,45 @@ def create_app(storage_dir: Path | None = None) -> FastAPI:
             "cytoscape_elements": dag.to_cytoscape_elements(),
         }
 
+    @app.get("/api/runs/{run_id}/report.html", response_class=HTMLResponse)
+    async def get_run_report(run_id: str) -> str:
+        file_path = runs_dir / f"{run_id}.json"
+        if not file_path.exists():
+            matches = list(runs_dir.glob(f"{run_id}*.json"))
+            if matches:
+                file_path = matches[0]
+            else:
+                raise HTTPException(status_code=404, detail="Run not found")
+
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+        dag = DecisionDAG.from_dict(data)
+
+        import tempfile
+
+        from ..export.report import generate_html_report
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        generate_html_report(dag, tmp_path)
+        content = tmp_path.read_text(encoding="utf-8")
+        tmp_path.unlink(missing_ok=True)
+        return content
+
+    @app.get("/api/runs/{run_id}/diff/{node_a}/{node_b}")
+    async def get_nodes_diff(run_id: str, node_a: str, node_b: str) -> dict[str, Any]:
+        file_path = runs_dir / f"{run_id}.json"
+        if not file_path.exists():
+            matches = list(runs_dir.glob(f"{run_id}*.json"))
+            if matches:
+                file_path = matches[0]
+            else:
+                raise HTTPException(status_code=404, detail="Run not found")
+
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+        dag = DecisionDAG.from_dict(data)
+        from ..graph.diff import compare_branches
+        comparison = compare_branches(dag, node_a, node_b)
+        return comparison.model_dump()
+
     @app.post("/api/runs/{run_id}/rewind")
     async def rewind_run(run_id: str, req: RewindRequest) -> dict[str, Any]:
         file_path = runs_dir / f"{run_id}.json"
