@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <clipPath id="squircle-clip">
+      <rect x="24" y="24" width="976" height="976" rx="220" />
+    </clipPath>
+
+    <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f5ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <linearGradient id="amber-accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+
+    <linearGradient id="slate-highlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+
+    <linearGradient id="slate-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+
+    <linearGradient id="slate-mid" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="slate-dark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <linearGradient id="obsidian-deep" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#070b12"/>
+    </linearGradient>
+
+    <filter id="subtle-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#070b14" flood-opacity="0.22" />
+    </filter>
+  </defs>
+
+  <!-- Luxury White Squircle Container -->
+  <rect x="24" y="24" width="976" height="976" rx="220" fill="#ffffff" stroke="#e2e8f0" stroke-width="6" />
+
+  <g clip-path="url(#squircle-clip)">
+    <g transform="translate(512, 512)" filter="url(#subtle-shadow)">
+
+      <!-- Hexagonal Architectural Gateway Frame -->
+      <polygon points="
+        0,-390
+        338,-195
+        338,195
+        0,390
+        -338,195
+        -338,-195
+      " fill="none" stroke="#0f172a" stroke-width="40" stroke-linejoin="round" />
+
+      <polygon points="
+        0,-355
+        307,-177
+        307,177
+        0,355
+        -307,177
+        -307,-177
+      " fill="none" stroke="#00f5ff" stroke-width="4" opacity="0.45" stroke-dasharray="16, 12" />
+
+      <!-- 100% Watertight Solid Base Silhouette -->
+      <path d="
+        M 0,-305
+        L 55,-280 L 110,-310 L 130,-220 L 175,-140 L 255,-30 L 275,60 L 235,170 L 175,250 L 95,305 L 0,330
+        L -95,305 L -175,250 L -235,170 L -275,60 L -255,-30 L -175,-140 L -130,-220 L -110,-310 L -55,-280
+        Z
+      " fill="#070b12" />
+
+      <!-- === Low-Poly Facets of the Sentinel Raptor === -->
+
+      <!-- Regal Crest Spikes (Top Crown) -->
+      <polygon points="0,-305 55,-280 0,-240" fill="url(#slate-highlight)" />
+      <polygon points="0,-305 -55,-280 0,-240" fill="url(#slate-light)" />
+
+      <!-- Outer Horn / Crest Winglets -->
+      <polygon points="55,-280 110,-310 80,-230 0,-240" fill="url(#slate-light)" />
+      <polygon points="-55,-280 -110,-310 -80,-230 0,-240" fill="url(#slate-mid)" />
+
+      <polygon points="110,-310 130,-220 80,-230" fill="url(#slate-mid)" />
+      <polygon points="-110,-310 -130,-220 -80,-230" fill="url(#slate-dark)" />
+
+      <!-- Crown Center Facets -->
+      <polygon points="0,-240 80,-230 45,-160 0,-175" fill="url(#slate-light)" />
+      <polygon points="0,-240 -80,-230 -45,-160 0,-175" fill="url(#slate-mid)" />
+
+      <!-- Forehead Diamond Keel -->
+      <polygon points="0,-175 45,-160 0,-105" fill="url(#slate-highlight)" />
+      <polygon points="0,-175 -45,-160 0,-105" fill="url(#slate-light)" />
+
+      <!-- Aggressive Supraorbital Brow (Slanted Predator Eyebrows) -->
+      <polygon points="45,-160 115,-150 95,-105 0,-105" fill="url(#slate-dark)" />
+      <polygon points="-45,-160 -115,-150 -95,-105 0,-105" fill="url(#obsidian-deep)" />
+
+      <!-- Electric Cyan Raptor Optics (Fierce Almond Geometry) -->
+      <!-- Left Eye -->
+      <polygon points="-90,-125 -42,-112 -55,-100 -95,-110" fill="url(#cyan-glow)" />
+      <polygon points="-75,-118 -50,-112 -60,-106 -80,-111" fill="#ffffff" opacity="0.95" />
+
+      <!-- Right Eye -->
+      <polygon points="90,-125 42,-112 55,-100 95,-110" fill="url(#cyan-glow)" />
+      <polygon points="75,-118 50,-112 60,-106 80,-111" fill="#ffffff" opacity="0.95" />
+
+      <!-- Nasal Bridge & Cheek Contours -->
+      <polygon points="0,-105 35,-95 0,-25" fill="url(#slate-light)" />
+      <polygon points="0,-105 -35,-95 0,-25" fill="url(#slate-mid)" />
+
+      <polygon points="35,-95 95,-105 135,-40 30,-30" fill="url(#slate-mid)" />
+      <polygon points="-35,-95 -95,-105 -135,-40 -30,-30" fill="url(#slate-dark)" />
+
+      <!-- Hooked Raptor Beak (Sharp Amber Gold Blade) -->
+      <polygon points="0,-25 28,-25 0,65" fill="url(#amber-accent)" />
+      <polygon points="0,-25 -28,-25 0,65" fill="#b45309" />
+      <polygon points="0,65 18,10 0,-5" fill="#fef3c7" opacity="0.5" />
+
+      <polygon points="28,-25 30,-30 85,15 0,65" fill="url(#slate-dark)" />
+      <polygon points="-28,-25 -30,-30 -85,15 0,65" fill="url(#obsidian-deep)" />
+
+      <!-- Throat Gorget Shield -->
+      <polygon points="0,65 55,105 0,150" fill="url(#slate-highlight)" />
+      <polygon points="0,65 -55,105 0,150" fill="url(#slate-mid)" />
+
+      <!-- Outer Aerodynamic Mantle (Upper Wings / Shoulders) -->
+      <polygon points="130,-220 175,-140 115,-150" fill="url(#slate-mid)" />
+      <polygon points="-130,-220 -175,-140 -115,-150" fill="url(#slate-dark)" />
+
+      <polygon points="175,-140 255,-30 180,-20 135,-40" fill="url(#slate-light)" />
+      <polygon points="-175,-140 -255,-30 -180,-20 -135,-40" fill="url(#obsidian-deep)" />
+
+      <polygon points="255,-30 275,60 205,75 180,-20" fill="url(#slate-mid)" />
+      <polygon points="-255,-30 -275,60 -205,75 -180,-20" fill="url(#slate-dark)" />
+
+      <polygon points="275,60 235,170 175,160 205,75" fill="url(#slate-light)" />
+      <polygon points="-275,60 -235,170 -175,160 -205,75" fill="url(#obsidian-deep)" />
+
+      <polygon points="235,170 175,250 125,230 175,160" fill="url(#slate-dark)" />
+      <polygon points="-235,170 -175,250 -125,230 -175,160" fill="url(#slate-mid)" />
+
+      <!-- Central Armored Keel & DAG Harness Strike Plates -->
+      <polygon points="0,150 55,105 135,115 80,195 0,225" fill="url(#slate-light)" />
+      <polygon points="0,150 -55,105 -135,115 -80,195 0,225" fill="url(#slate-mid)" />
+
+      <polygon points="55,105 180,-20 205,75 135,115" fill="url(#slate-dark)" />
+      <polygon points="-55,105 -180,-20 -205,75 -135,115" fill="url(#obsidian-deep)" />
+
+      <!-- Lower DAG Execution Vector Plates -->
+      <polygon points="0,225 80,195 125,230 0,285" fill="url(#slate-mid)" />
+      <polygon points="0,225 -80,195 -125,230 0,285" fill="url(#slate-dark)" />
+
+      <polygon points="80,195 175,160 125,230" fill="url(#slate-dark)" />
+      <polygon points="-80,195 -175,160 -125,230" fill="url(#obsidian-deep)" />
+
+      <polygon points="125,230 175,250 95,305 45,295 0,285" fill="url(#slate-dark)" />
+      <polygon points="-125,230 -175,250 -95,305 -45,295 0,285" fill="url(#obsidian-deep)" />
+
+      <polygon points="0,285 45,295 0,330" fill="url(#slate-highlight)" />
+      <polygon points="0,285 -45,295 0,330" fill="url(#slate-light)" />
+
+      <!-- Central Causal Checkpoint Nodes (Electric Cyan Inlaid Jewels) -->
+      <polygon points="0,135 9,145 0,155 -9,145" fill="url(#cyan-glow)" />
+      <polygon points="0,215 9,225 0,235 -9,225" fill="url(#cyan-glow)" />
+      <polygon points="0,275 8,285 0,295 -8,285" fill="url(#cyan-glow)" />
+
+      <!-- Micro Causal DAG Connecting Lines -->
+      <line x1="0" y1="155" x2="0" y2="215" stroke="#00f5ff" stroke-width="2.5" opacity="0.6" stroke-dasharray="4, 4" />
+      <line x1="0" y1="235" x2="0" y2="275" stroke="#00f5ff" stroke-width="2.5" opacity="0.6" stroke-dasharray="4, 4" />
+
+    </g>
+  </g>
+</svg>

@@ -1,6 +1,22 @@
-# AgentHarness
+<p align="center">
+  <img src="docs/images/logo.png?raw=true" alt="AgentHarness Logo" width="140" style="border-radius: 28px;" />
+</p>
 
-AgentHarness is an execution runtime for autonomous AI agents that invoke tools, run code, and execute shell commands. It isolates tool runs inside sandboxes, records reasoning trajectories in an immutable Directed Acyclic Graph (DAG), and provides a time-travel debugger to rewind and branch execution when an agent makes an error.
+<h1 align="center">AgentHarness</h1>
+
+<p align="center">
+  <strong>Deterministic Execution Runtime &amp; Time-Travel Debugger for Autonomous AI Agents</strong>
+</p>
+
+<p align="center">
+  <a href="#key-capabilities">Features</a> •
+  <a href="#quickstart">Quickstart</a> •
+  <a href="#web-decision-graph-studio">Web Studio</a> •
+  <a href="#standalone-audit-reports">Reports</a> •
+  <a href="#documentation">Docs</a>
+</p>
+
+AgentHarness is a deterministic execution runtime for autonomous AI agents that execute tools, run code, and invoke shell commands. It confines tool executions inside sandboxes, records reasoning trajectories in an immutable Directed Acyclic Graph (DAG), and provides a time-travel debugger to rewind and branch execution when an agent makes an error.
 
 ```
                   +-------------------------------------------------------+
@@ -115,13 +131,41 @@ Keyboard shortcuts:
 
 ### Web Decision Graph Studio
 
-Launch the local web visualizer:
+Launch the local web visualizer to inspect DAG trajectories and branch points in your browser:
 
 ```bash
 agent-harness serve --port 8000
 ```
 
-Open `http://localhost:8000` to interact with the real-time Cytoscape.js decision graph, trigger step replays, and compare branches side by side.
+Open `http://localhost:8000` to interact with the Cytoscape.js decision graph, inspect tool call arguments, token spend, and trigger time-travel rewinds directly from the browser UI.
+
+<p align="center">
+  <img src="docs/images/web_studio_dag.png?raw=true" alt="AgentHarness Web Studio" width="96%" style="border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" />
+</p>
+
+### Standalone HTML Audit Reports
+
+Generate self-contained, zero-dependency HTML audit reports with interactive graph exploration, metric cards, and step inspection to share with team members or attach to CI/CD pipelines:
+
+```bash
+agent-harness report <run-id> --output report.html
+```
+
+<p align="center">
+  <img src="docs/images/standalone_report.png?raw=true" alt="AgentHarness Standalone Report" width="96%" style="border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" />
+</p>
+
+### Deterministic & Fuzzy Cassette Replay
+
+Replay previously recorded agent trajectories deterministically offline, or enable semantic fuzzy matching to tolerate minor wording variances in prompts:
+
+```bash
+# Exact deterministic replay
+agent-harness replay path/to/cassette.json
+
+# Replay with fuzzy prompt similarity matching
+agent-harness replay path/to/cassette.json --fuzzy --threshold 0.85
+```
 
 ## Project Structure
 
