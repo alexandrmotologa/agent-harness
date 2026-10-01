@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -197,6 +197,52 @@ def create_app(storage_dir: Path | None = None) -> FastAPI:
         content = tmp_path.read_text(encoding="utf-8")
         tmp_path.unlink(missing_ok=True)
         return content
+
+    @app.get("/api/runs/{run_id}/export/mermaid", response_class=PlainTextResponse)
+    async def get_mermaid_export(run_id: str) -> str:
+        file_path = runs_dir / f"{run_id}.json"
+        if not file_path.exists():
+            matches = list(runs_dir.glob(f"{run_id}*.json"))
+            if matches:
+                file_path = matches[0]
+            else:
+                raise HTTPException(status_code=404, detail="Run not found")
+
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+        dag = DecisionDAG.from_dict(data)
+        from ..export.report import generate_mermaid_diagram
+        return generate_mermaid_diagram(dag)
+
+    @app.get("/api/runs/{run_id}/export/otel")
+    async def get_otel_export(run_id: str) -> dict[str, Any]:
+        file_path = runs_dir / f"{run_id}.json"
+        if not file_path.exists():
+            matches = list(runs_dir.glob(f"{run_id}*.json"))
+            if matches:
+                file_path = matches[0]
+            else:
+                raise HTTPException(status_code=404, detail="Run not found")
+
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+        dag = DecisionDAG.from_dict(data)
+        from ..export.report import generate_otel_trace
+        return generate_otel_trace(dag)
+
+    @app.get("/api/runs/{run_id}/export/jsonl", response_class=PlainTextResponse)
+    async def get_jsonl_export(run_id: str) -> str:
+        file_path = runs_dir / f"{run_id}.json"
+        if not file_path.exists():
+            matches = list(runs_dir.glob(f"{run_id}*.json"))
+            if matches:
+                file_path = matches[0]
+            else:
+                raise HTTPException(status_code=404, detail="Run not found")
+
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+        dag = DecisionDAG.from_dict(data)
+        from ..export.report import generate_jsonl_dataset
+        records = generate_jsonl_dataset(dag)
+        return "\n".join(json.dumps(r) for r in records) + "\n"
 
     @app.get("/api/runs/{run_id}/diff/{node_a}/{node_b}")
     async def get_nodes_diff(run_id: str, node_a: str, node_b: str) -> dict[str, Any]:

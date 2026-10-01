@@ -73,7 +73,13 @@
       <button class="secondary" onclick="fitGraph()">Fit Graph</button>
       <button class="success" onclick="openNewRunModal()">+ New Goal</button>
       <button onclick="openRewindModal()">Rewind &amp; Branch</button>
-      <button class="secondary" onclick="openReport()">Audit Report</button>
+      <select id="export-select" onchange="handleExport(this.value)" style="background: #1f2937; cursor: pointer;">
+        <option value="">Export ▾</option>
+        <option value="html">HTML Audit Report</option>
+        <option value="mermaid">Mermaid Flowchart (.mmd)</option>
+        <option value="otel">OpenTelemetry Trace (.json)</option>
+        <option value="jsonl">Fine-Tuning Dataset (.jsonl)</option>
+      </select>
     </div>
   </header>
 
@@ -139,6 +145,8 @@
           <option value="mock">Mock Provider (Offline Deterministic)</option>
           <option value="anthropic">Anthropic Claude</option>
           <option value="openai">OpenAI</option>
+          <option value="gemini">Google Gemini</option>
+          <option value="deepseek">DeepSeek</option>
           <option value="ollama">Ollama (Local)</option>
         </select>
       </div>
@@ -320,11 +328,20 @@
       document.getElementById('new-run-modal').style.display = 'none';
     }
 
-    function openReport() {
+    function handleExport(fmt) {
+      if (!fmt) return;
       const runId = document.getElementById('run-select').value;
-      if (runId) {
-        window.open(`/api/runs/${runId}/report.html`, '_blank');
+      if (!runId) {
+        showToast('Please select a run to export.', 'error');
+        document.getElementById('export-select').value = '';
+        return;
       }
+      if (fmt === 'html') {
+        window.open(`/api/runs/${runId}/report.html`, '_blank');
+      } else {
+        window.open(`/api/runs/${runId}/export/${fmt}`, '_blank');
+      }
+      document.getElementById('export-select').value = '';
     }
 
     async function submitRewind() {
