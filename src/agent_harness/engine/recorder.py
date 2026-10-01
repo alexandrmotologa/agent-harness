@@ -1,3 +1,4 @@
+import difflib
 import hashlib
 import json
 from pathlib import Path
@@ -11,6 +12,7 @@ from ..providers.base import BaseProvider, LLMResponse, LLMToolCall
 class CassetteEntry(BaseModel):
     request_hash: str
     messages_summary: str = ""
+    messages_raw: str = ""
     response: dict[str, Any]
 
 
@@ -30,7 +32,7 @@ def compute_request_hash(messages: list[dict[str, Any]], tools: list[dict[str, A
 class ReplayProvider(BaseProvider):
     """
     Provider that records live completions to a cassette file or replays
-    recorded completions deterministically without invoking external APIs.
+    recorded completions deterministically (exact or fuzzy) without invoking external APIs.
     """
 
     def __init__(
@@ -39,11 +41,15 @@ class ReplayProvider(BaseProvider):
         mode: str = "replay",  # "record" or "replay"
         fallback_provider: BaseProvider | None = None,
         model: str = "replay-agent",
+        fuzzy: bool = False,
+        fuzzy_threshold: float = 0.85,
     ):
         super().__init__(model=model)
         self.cassette_path = cassette_path
         self.mode = mode
         self.fallback_provider = fallback_provider
+        self.fuzzy = fuzzy
+        self.fuzzy_threshold = fuzzy_threshold
         self.cassette = self._load_cassette()
 
     def _load_cassette(self) -> Cassette:
@@ -69,23 +75,29 @@ class ReplayProvider(BaseProvider):
         system: str | None = None,
     ) -> LLMResponse:
         req_hash = compute_request_hash(messages, tools)
+        current_summary = json.dumps(messages, sort_keys=True)
 
-        # In replay mode, look up match
+        # In replay mode, look up exact or fuzzy match
         if self.mode == "replay":
+            # 1. Exact hash match
             for entry in self.cassette.entries:
                 if entry.request_hash == req_hash:
-                    resp_dict = entry.response
-                    tool_calls = [
-                        LLMToolCall.model_validate(tc)
-                        for tc in resp_dict.get("tool_calls", [])
-                    ]
-                    return LLMResponse(
-                        content=resp_dict.get("content", ""),
-                        tool_calls=tool_calls,
-                        prompt_tokens=resp_dict.get("prompt_tokens", 0),
-                        completion_tokens=resp_dict.get("completion_tokens", 0),
-                        finish_reason=resp_dict.get("finish_reason", "stop"),
-                    )
+                    return self._deserialize_response(entry.response)
+
+            # 2. Fuzzy similarity match
+            if self.fuzzy and self.cassette.entries:
+                best_entry = None
+                best_ratio = 0.0
+                for entry in self.cassette.entries:
+                    target_text = entry.messages_raw or entry.messages_summary
+                    ratio = difflib.SequenceMatcher(None, current_summary, target_text).ratio()
+                    if ratio > best_ratio:
+                        best_ratio = ratio
+                        best_entry = entry
+
+                if best_entry and best_ratio >= self.fuzzy_threshold:
+                    return self._deserialize_response(best_entry.response)
+
             # If not found in replay, raise or fall back
             if not self.fallback_provider:
                 raise ValueError(
@@ -98,6 +110,7 @@ class ReplayProvider(BaseProvider):
             entry = CassetteEntry(
                 request_hash=req_hash,
                 messages_summary=str(messages[-1]) if messages else "",
+                messages_raw=current_summary,
                 response={
                     "content": live_resp.content,
                     "tool_calls": [tc.model_dump() for tc in live_resp.tool_calls],
@@ -111,3 +124,16 @@ class ReplayProvider(BaseProvider):
             return live_resp
 
         raise ValueError("Cannot chat: no fallback provider configured for recording.")
+
+    def _deserialize_response(self, resp_dict: dict[str, Any]) -> LLMResponse:
+        tool_calls = [
+            LLMToolCall.model_validate(tc)
+            for tc in resp_dict.get("tool_calls", [])
+        ]
+        return LLMResponse(
+            content=resp_dict.get("content", ""),
+            tool_calls=tool_calls,
+            prompt_tokens=resp_dict.get("prompt_tokens", 0),
+            completion_tokens=resp_dict.get("completion_tokens", 0),
+            finish_reason=resp_dict.get("finish_reason", "stop"),
+        )

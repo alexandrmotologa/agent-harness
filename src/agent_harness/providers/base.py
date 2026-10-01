@@ -24,6 +24,12 @@ class BaseProvider(ABC):
         self.api_key = api_key
         self.base_url = base_url
 
+    def format_tools(self, tool_registry: Any) -> list[dict[str, Any]]:
+        """Format tools from ToolRegistry for this provider."""
+        if hasattr(tool_registry, "to_anthropic_tools"):
+            return tool_registry.to_anthropic_tools()
+        return []
+
     @abstractmethod
     async def chat(
         self,
@@ -32,3 +38,4 @@ class BaseProvider(ABC):
         system: str | None = None,
     ) -> LLMResponse:
         """Send chat messages and available tools to the language model provider."""
+

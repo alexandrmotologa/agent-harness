@@ -77,11 +77,16 @@ class BudgetController:
         self.cumulative_completion_tokens: int = 0
 
     def calculate_cost(self, prompt_tokens: int, completion_tokens: int) -> float:
-        # Find matching rates or default
-        rates = MODEL_COST_PER_MILLION_TOKENS.get(
-            self.model_name,
-            MODEL_COST_PER_MILLION_TOKENS["claude-3-7-sonnet"],
-        )
+        # Exact match or substring/prefix match
+        rates = MODEL_COST_PER_MILLION_TOKENS.get(self.model_name)
+        if not rates:
+            for k, v in MODEL_COST_PER_MILLION_TOKENS.items():
+                if k in self.model_name or self.model_name in k:
+                    rates = v
+                    break
+        if not rates:
+            rates = MODEL_COST_PER_MILLION_TOKENS["claude-3-7-sonnet"]
+
         prompt_cost = (prompt_tokens / 1_000_000.0) * rates[0]
         completion_cost = (completion_tokens / 1_000_000.0) * rates[1]
         return prompt_cost + completion_cost

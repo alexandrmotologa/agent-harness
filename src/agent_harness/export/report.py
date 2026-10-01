@@ -136,7 +136,7 @@ def generate_html_report(dag: DecisionDAG, output_file: Path) -> Path:
         <h2 style="font-size: 1.1rem; margin-bottom: 12px;">${{node.title || 'Step Details'}}</h2>
         <div class="meta-item"><span>Step:</span> #${{node.step_index}} (${{node.branch_id}})</div>
         <div class="meta-item"><span>Node ID:</span> ${{node.id}}</div>
-        <div class="meta-item"><span>Content Hash:</span> <code>${{node.content_hash.substring(0, 16)}}...</code></div>
+        <div class="meta-item"><span>Content Hash:</span> <code>${{node.content_hash ? node.content_hash.substring(0, 16) + '...' : 'N/A'}}</code></div>
         <div class="meta-item"><span>Checkpoint:</span> ${{node.checkpoint_id || 'None'}}</div>
         <div class="meta-item"><span>Tokens:</span> ${{node.token_usage}}</div>
         <div style="margin-top: 14px;">

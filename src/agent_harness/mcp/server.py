@@ -76,16 +76,12 @@ class MCPServer:
             raise ValueError(f"Unknown tool '{name}'")
 
     async def run_stdio(self) -> None:
-        reader = asyncio.StreamReader()
-        protocol = asyncio.StreamReaderProtocol(reader)
-        await asyncio.get_running_loop().connect_read_pipe(lambda: protocol, sys.stdin)
-
         while True:
-            line = await reader.readline()
-            if not line:
+            line_str = await asyncio.to_thread(sys.stdin.readline)
+            if not line_str:
                 break
             try:
-                request = json.loads(line.decode("utf-8"))
+                request = json.loads(line_str)
             except Exception:
                 continue
 

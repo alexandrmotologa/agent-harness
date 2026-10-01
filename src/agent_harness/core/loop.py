@@ -163,7 +163,7 @@ class AutonomousLoop:
             self.context_mgr.prune_if_needed()
 
             # Format tool list for provider
-            tools_for_provider = self.tools.to_anthropic_tools()
+            tools_for_provider = self.provider.format_tools(self.tools)
 
             # Request completion from provider
             try:

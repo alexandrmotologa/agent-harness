@@ -46,3 +46,18 @@ async def test_recorder_and_replay_cycle(temp_workspace):
     assert res2.content == "Deterministic recorded response"
     assert res2.tool_calls[0].name == "read_file"
     assert res2.prompt_tokens == 42
+
+    # Step 3: Fuzzy replay mode with minor prompt variation
+    fuzzy_replayer = ReplayProvider(
+        cassette_path=cassette_file,
+        mode="replay",
+        fuzzy=True,
+        fuzzy_threshold=0.75,
+        fallback_provider=None,
+    )
+
+    fuzzy_messages = [{"role": "user", "content": "What is inside a.txt?"}]
+    res3 = await fuzzy_replayer.chat(fuzzy_messages, tools)
+    assert res3.content == "Deterministic recorded response"
+    assert res3.tool_calls[0].name == "read_file"
+

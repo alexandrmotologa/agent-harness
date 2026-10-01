@@ -7,6 +7,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, ListItem, ListView, Static
 
 from ..graph.decision_dag import DecisionDAG, DecisionNode, NodeType
+from ..graph.diff_viewer import format_colored_diff
 
 
 class DecisionNodeItem(ListItem):
@@ -26,6 +27,8 @@ class DecisionNodeItem(ListItem):
             color = "green"
         elif self.node.node_type == NodeType.FINAL_ANSWER:
             color = "bright_green"
+        elif self.node.node_type == NodeType.INTERVENTION:
+            color = "magenta"
         elif self.node.node_type == NodeType.ERROR:
             color = "red"
 
@@ -44,10 +47,10 @@ class NodeDetailWidget(Static):
             return
 
         lines = [
-            f"[bold cyan]Step #{node.step_index}[/bold cyan] ({node.branch_id})",
+            f"[bold cyan]Step #{node.step_index}[/bold cyan] (Branch: [bold yellow]{node.branch_id}[/bold yellow])",
             f"[bold]Node ID:[/bold] {node.id}",
             f"[bold]Type:[/bold] {node.node_type.value}",
-            f"[bold]Content Hash:[/bold] {node.content_hash}",
+            f"[bold]Content Hash:[/bold] {node.content_hash[:16]}..." if node.content_hash else "None",
             f"[bold]Checkpoint ID:[/bold] {node.checkpoint_id or 'None'}",
             f"[bold]Token Usage:[/bold] {node.token_usage} | [bold]Cost:[/bold] ${node.cost_usd:.4f}",
             "",
@@ -59,10 +62,19 @@ class NodeDetailWidget(Static):
             lines.extend([
                 "",
                 "[bold green]Tool Observation Output:[/bold green]",
-                node.payload["output"][:1000],
+                str(node.payload["output"])[:1000],
             ])
 
         self.update("\n".join(lines))
+
+    def show_text(self, title: str, text: str) -> None:
+        self.update(f"[bold cyan]{title}[/bold cyan]\n\n{text}")
+
+    def show_rich_diff(self, title: str, diff_text: str) -> None:
+        rich_diff = format_colored_diff(diff_text)
+        header = Text(f"{title}\n\n", style="bold cyan")
+        header.append_text(rich_diff)
+        self.update(header)
 
 
 class AgentHarnessTUI(App):
@@ -108,6 +120,10 @@ class AgentHarnessTUI(App):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("r", "refresh_nodes", "Refresh"),
+        ("u", "rewind_step", "Rewind"),
+        ("b", "fork_branch", "Fork Branch"),
+        ("s", "view_logs", "Logs"),
+        ("d", "view_diff", "Diff"),
     ]
 
     def __init__(self, run_id: str | None = None, storage_dir: Path | None = None):
@@ -115,6 +131,7 @@ class AgentHarnessTUI(App):
         self.run_id = run_id
         self.storage_dir = storage_dir or Path(".harness/runs").resolve()
         self.dag: DecisionDAG | None = None
+        self.selected_node: DecisionNode | None = None
         self._load_dag()
 
     def _load_dag(self) -> None:
@@ -125,7 +142,6 @@ class AgentHarnessTUI(App):
                 self.dag = DecisionDAG.from_dict(data)
                 return
 
-        # Try to load latest run in storage
         if self.storage_dir.exists():
             runs = sorted(self.storage_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
             if runs:
@@ -164,12 +180,17 @@ class AgentHarnessTUI(App):
             for node in nodes:
                 node_list.append(DecisionNodeItem(node))
 
+            if nodes:
+                self.selected_node = nodes[0]
+                detail = self.query_one("#node-detail", NodeDetailWidget)
+                detail.show_node(self.selected_node)
+
             total_tokens = sum(n.token_usage for n in nodes)
             total_cost = sum(n.cost_usd for n in nodes)
             status_bar = self.query_one("#status-bar", Static)
             status_bar.update(
                 f"Run: [bold white]{self.dag.run_id}[/bold white] | "
-                f"Goal: {self.dag.goal[:40]}... | "
+                f"Goal: {self.dag.goal[:35]}... | "
                 f"Steps: {len(nodes)} | "
                 f"Tokens: {total_tokens} | "
                 f"Cost: ${total_cost:.4f}"
@@ -177,5 +198,53 @@ class AgentHarnessTUI(App):
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if isinstance(event.item, DecisionNodeItem):
+            self.selected_node = event.item.node
             detail = self.query_one("#node-detail", NodeDetailWidget)
             detail.show_node(event.item.node)
+
+    def action_rewind_step(self) -> None:
+        if not self.selected_node:
+            return
+        detail = self.query_one("#node-detail", NodeDetailWidget)
+        detail.show_text(
+            f"Rewind Action (Step #{self.selected_node.step_index})",
+            f"To rewind execution to Step #{self.selected_node.step_index} ({self.selected_node.id}), run:\n\n"
+            f"[bold green]agent-harness rewind {self.dag.run_id} --step {self.selected_node.step_index} --prompt \"New instruction\"[/bold green]"
+        )
+
+    def action_fork_branch(self) -> None:
+        if not self.selected_node:
+            return
+        detail = self.query_one("#node-detail", NodeDetailWidget)
+        detail.show_text(
+            f"Fork Branch Action (Step #{self.selected_node.step_index})",
+            f"Forking branch from Node [cyan]{self.selected_node.id}[/cyan] (Branch: {self.selected_node.branch_id}).\n\n"
+            f"[bold green]agent-harness rewind {self.dag.run_id} --step {self.selected_node.step_index}[/bold green]"
+        )
+
+    def action_view_logs(self) -> None:
+        if not self.selected_node:
+            return
+        detail = self.query_one("#node-detail", NodeDetailWidget)
+        output = self.selected_node.payload.get("output", "No direct tool output recorded for this step.")
+        detail.show_text(
+            f"Logs & Output: Step #{self.selected_node.step_index} ({self.selected_node.title or self.selected_node.node_type.value})",
+            output,
+        )
+
+    def action_view_diff(self) -> None:
+        if not self.selected_node:
+            return
+        detail = self.query_one("#node-detail", NodeDetailWidget)
+        # Check if node has checkpoint diff
+        checkpoint_id = self.selected_node.checkpoint_id
+        if checkpoint_id:
+            detail.show_text(
+                f"Checkpoint Info (Step #{self.selected_node.step_index})",
+                f"Checkpoint ID: [bold yellow]{checkpoint_id}[/bold yellow]\nFilesystem state preserved in snapshot storage.",
+            )
+        else:
+            detail.show_text(
+                f"Diff Viewer (Step #{self.selected_node.step_index})",
+                "No filesystem snapshot attached to this node type.\nSnapshots are captured on tool executions (OBSERVATION).",
+            )

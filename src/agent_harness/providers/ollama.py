@@ -13,6 +13,11 @@ class OllamaProvider(BaseProvider):
     ):
         super().__init__(model=model, base_url=base_url)
 
+    def format_tools(self, tool_registry: Any) -> list[dict[str, Any]]:
+        if hasattr(tool_registry, "to_openai_tools"):
+            return tool_registry.to_openai_tools()
+        return []
+
     async def chat(
         self,
         messages: list[dict[str, Any]],

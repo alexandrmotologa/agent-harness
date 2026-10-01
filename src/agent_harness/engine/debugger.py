@@ -79,13 +79,88 @@ class TimeTravelDebugger:
             branch_id=branch_name,
         )
 
+        from ..core.loop import SYSTEM_PROMPT
+
         # Populate context manager with historical conversation
-        loop.context_mgr.add_message("system", f"Goal: {self.dag.goal}")
-        for n in history:
-            if n.node_type == NodeType.THOUGHT:
-                loop.context_mgr.add_message("assistant", n.payload.get("thought", ""))
-            elif n.node_type == NodeType.OBSERVATION:
-                loop.context_mgr.add_message("tool", n.payload.get("output", ""))
+        loop.context_mgr.add_message("system", SYSTEM_PROMPT)
+        loop.context_mgr.add_message("user", f"Goal: {self.dag.goal}")
+
+        i = 0
+        while i < len(history):
+            node = history[i]
+            if node.node_type == NodeType.GOAL:
+                i += 1
+                continue
+
+            if node.node_type == NodeType.THOUGHT:
+                thought_text = node.payload.get("thought", "")
+                tool_calls_raw = []
+                j = i + 1
+                while j < len(history) and history[j].node_type == NodeType.TOOL_CALL:
+                    tc_node = history[j]
+                    tool_calls_raw.append({
+                        "id": tc_node.payload.get("call_id", f"call_{tc_node.id}"),
+                        "type": "function",
+                        "function": {
+                            "name": tc_node.payload.get("tool_name", ""),
+                            "arguments": tc_node.payload.get("arguments", {}),
+                        },
+                    })
+                    j += 1
+
+                loop.context_mgr.add_message(
+                    "assistant",
+                    thought_text,
+                    tool_calls=tool_calls_raw,
+                )
+                i = j
+                continue
+
+            elif node.node_type == NodeType.TOOL_CALL:
+                tool_calls_raw = [{
+                    "id": node.payload.get("call_id", f"call_{node.id}"),
+                    "type": "function",
+                    "function": {
+                        "name": node.payload.get("tool_name", ""),
+                        "arguments": node.payload.get("arguments", {}),
+                    },
+                }]
+                loop.context_mgr.add_message(
+                    "assistant",
+                    "",
+                    tool_calls=tool_calls_raw,
+                )
+                i += 1
+                continue
+
+            elif node.node_type == NodeType.OBSERVATION:
+                parent_call = next(
+                    (self.dag.get_node(pid) for pid in node.parent_ids if self.dag.get_node(pid) and self.dag.get_node(pid).node_type == NodeType.TOOL_CALL),
+                    None,
+                )
+                call_id = parent_call.payload.get("call_id", f"call_{parent_call.id}") if parent_call else None
+                tool_name = parent_call.payload.get("tool_name") if parent_call else None
+                loop.context_mgr.add_message(
+                    role="tool",
+                    content=str(node.payload.get("output", "")),
+                    tool_call_id=call_id,
+                    name=tool_name,
+                )
+                i += 1
+                continue
+
+            elif node.node_type == NodeType.INTERVENTION:
+                prev_instruction = node.payload.get("new_instruction")
+                if prev_instruction:
+                    loop.context_mgr.add_message(
+                        "user",
+                        f"[Prior Intervention]: {prev_instruction}",
+                    )
+                i += 1
+                continue
+
+            else:
+                i += 1
 
         if new_instruction:
             loop.context_mgr.add_message(
