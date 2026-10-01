@@ -404,8 +404,9 @@ def report(
 @app.command(name="eval")
 def run_eval(
     suite_file: Annotated[str, typer.Argument(help="Path to YAML or JSON eval suite file")],
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Provider: mock, anthropic, openai")] = "mock",
+    provider: Annotated[str, typer.Option("--provider", "-p", help="Provider: mock, anthropic, openai, gemini, deepseek, ollama")] = "mock",
     model: Annotated[str, typer.Option("--model", "-m", help="Model name identifier")] = "claude-3-7-sonnet",
+    concurrency: Annotated[int, typer.Option("--concurrency", "-c", help="Number of concurrent test cases")] = 4,
 ):
     """Run an automated evaluation suite against declarative assertions."""
     path = Path(suite_file).resolve()
@@ -434,8 +435,8 @@ def run_eval(
     prov = get_provider(provider, model)
     runner = EvalRunner(provider=prov)
 
-    console.print(f"[bold cyan]Running Eval Suite: {suite.name} ({len(suite.cases)} test cases)...[/bold cyan]")
-    report_res = asyncio.run(runner.run_suite(suite))
+    console.print(f"[bold cyan]Running Eval Suite: {suite.name} ({len(suite.cases)} test cases, concurrency={concurrency})...[/bold cyan]")
+    report_res = asyncio.run(runner.run_suite(suite, concurrency=concurrency))
 
     table = Table(title=f"Eval Results: {report_res.suite_name}", show_header=True)
     table.add_column("Case ID", style="cyan")
@@ -468,6 +469,8 @@ def mcp_serve(
 @app.command()
 def diff(
     run_id: Annotated[str, typer.Argument(help="Run ID containing branches")],
+    branch_a: Annotated[str | None, typer.Option("--branch-a", "-a", help="First branch name to compare")] = None,
+    branch_b: Annotated[str | None, typer.Option("--branch-b", "-b", help="Second branch name to compare")] = None,
     storage: Annotated[str, typer.Option("--storage", help="Path to runs directory")] = ".harness/runs",
 ):
     """View colored diffs between branches in an agent run."""
@@ -479,14 +482,38 @@ def diff(
 
     branches = dag.list_branches()
     console.print(f"[bold]Available Branches in '{run_id}':[/bold] {branches}")
+
     leaves = [n.id for n in dag.nodes_by_id.values() if dag.graph.out_degree(n.id) == 0]
-    if len(leaves) >= 2:
+
+    leaf_a_id = None
+    leaf_b_id = None
+
+    if branch_a and branch_b:
+        for leaf_id in leaves:
+            node = dag.nodes_by_id.get(leaf_id)
+            if node and node.branch_id == branch_a:
+                leaf_a_id = leaf_id
+            if node and node.branch_id == branch_b:
+                leaf_b_id = leaf_id
+    elif len(leaves) >= 2:
+        leaf_a_id, leaf_b_id = leaves[0], leaves[1]
+
+    if leaf_a_id and leaf_b_id:
         from .graph.diff import compare_branches
-        comparison = compare_branches(dag, leaves[0], leaves[1])
-        console.print(Panel(
-            f"Comparing {comparison.branch_a.branch_id} vs {comparison.branch_b.branch_id}\n"
-            f"Token Delta: {comparison.token_delta} | Cost Delta: ${comparison.cost_delta_usd:.4f}",
-            title="Branch Comparison",
-        ))
+        comparison = compare_branches(dag, leaf_a_id, leaf_b_id)
+
+        comp_table = Table(title=f"Branch Comparison: {comparison.branch_a.branch_id} vs {comparison.branch_b.branch_id}")
+        comp_table.add_column("Metric", style="cyan")
+        comp_table.add_column(f"Branch: {comparison.branch_a.branch_id}")
+        comp_table.add_column(f"Branch: {comparison.branch_b.branch_id}")
+        comp_table.add_column("Delta", style="yellow")
+
+        comp_table.add_row("Steps", str(comparison.branch_a.step_count), str(comparison.branch_b.step_count), str(comparison.branch_b.step_count - comparison.branch_a.step_count))
+        comp_table.add_row("Total Tokens", str(comparison.branch_a.total_tokens), str(comparison.branch_b.total_tokens), f"{comparison.token_delta:+d}")
+        comp_table.add_row("Total Cost", f"${comparison.branch_a.total_cost_usd:.4f}", f"${comparison.branch_b.total_cost_usd:.4f}", f"${comparison.cost_delta_usd:+.4f}")
+        comp_table.add_row("Divergence Step", f"Step #{comparison.divergence_step}", f"Step #{comparison.divergence_step}", "-")
+        comp_table.add_row("Tools Called", ", ".join(comparison.branch_a.tools_called) or "None", ", ".join(comparison.branch_b.tools_called) or "None", "-")
+
+        console.print(comp_table)
     else:
-        console.print("[yellow]Run contains only a single linear branch.[/yellow]")
+        console.print("[yellow]Could not find two distinct trajectory branches to compare. Run 'agent-harness rewind' to create alternate branches.[/yellow]")

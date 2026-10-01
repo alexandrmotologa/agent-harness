@@ -1,0 +1,64 @@
+{
+  "name": "Standard Agent Coding Benchmark",
+  "cases": [
+    {
+      "id": "case_math_primes",
+      "name": "Prime Numbers Generator",
+      "goal": "Write a python script primes.py that computes prime numbers up to 50 and saves them to primes.txt formatted as comma-separated integers.",
+      "initial_files": {},
+      "max_steps": 8,
+      "max_cost_usd": 0.05,
+      "assertions": [
+        {
+          "assertion_type": "file_exists",
+          "target": "primes.py"
+        },
+        {
+          "assertion_type": "file_exists",
+          "target": "primes.txt"
+        },
+        {
+          "assertion_type": "regex_match",
+          "target": "primes.txt",
+          "expected": "2,\\s*3,\\s*5,\\s*7"
+        },
+        {
+          "assertion_type": "stderr_empty"
+        },
+        {
+          "assertion_type": "max_steps",
+          "expected": 8
+        }
+      ]
+    },
+    {
+      "id": "case_refactor_auth",
+      "name": "Secure Auth Token Refactoring",
+      "goal": "Refactor auth.py to ensure token validation rejects expired tokens and write unit tests in test_auth.py.",
+      "initial_files": {
+        "auth.py": "import time\n\ndef validate_token(token: str, expires_at: float) -> bool:\n    # TODO: add expiration check\n    return token.startswith('auth_')\n"
+      },
+      "max_steps": 10,
+      "max_cost_usd": 0.10,
+      "assertions": [
+        {
+          "assertion_type": "file_exists",
+          "target": "test_auth.py"
+        },
+        {
+          "assertion_type": "file_contains",
+          "target": "auth.py",
+          "expected": "time.time()"
+        },
+        {
+          "assertion_type": "exit_code",
+          "expected": 0
+        },
+        {
+          "assertion_type": "answer_contains",
+          "expected": "refactor"
+        }
+      ]
+    }
+  ]
+}
