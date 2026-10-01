@@ -15,6 +15,8 @@ class ProviderType(StrEnum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     OLLAMA = "ollama"
+    GEMINI = "gemini"
+    DEEPSEEK = "deepseek"
 
 
 class GuardrailConfig(BaseModel):

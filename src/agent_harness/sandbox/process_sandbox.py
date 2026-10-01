@@ -44,6 +44,30 @@ def get_scrubbed_env(user_env: dict[str, str] | None = None) -> dict[str, str]:
     return clean_env
 
 
+def kill_process_tree(pid: int) -> None:
+    """Terminates process and all its children across Windows and POSIX."""
+    if os.name == "nt":
+        import subprocess
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except Exception:
+            pass
+    else:
+        import signal
+        try:
+            os.killpg(os.getpgid(pid), signal.SIGKILL)
+        except Exception:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except Exception:
+                pass
+
+
 class ProcessSandbox(BaseSandbox):
     def __init__(
         self,
@@ -72,7 +96,6 @@ class ProcessSandbox(BaseSandbox):
 
         start_time = time.perf_counter()
         try:
-            # Use shell execution on Windows/POSIX with workspace as cwd
             proc = await asyncio.create_subprocess_shell(
                 command,
                 cwd=str(self.workspace_dir),
@@ -92,9 +115,10 @@ class ProcessSandbox(BaseSandbox):
                 stdout_text = stdout_bytes.decode("utf-8", errors="replace")
                 stderr_text = stderr_bytes.decode("utf-8", errors="replace")
             except TimeoutError:
+                kill_process_tree(proc.pid)
                 try:
                     proc.kill()
-                except ProcessLookupError:
+                except Exception:
                     pass
                 exit_code = 124
                 stdout_text = ""

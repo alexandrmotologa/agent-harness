@@ -17,6 +17,8 @@ from .engine.recorder import ReplayProvider
 from .graph.decision_dag import DecisionDAG
 from .mcp.client import MCPClient
 from .providers.anthropic import AnthropicProvider
+from .providers.deepseek import DeepSeekProvider
+from .providers.gemini import GeminiProvider
 from .providers.mock import MockProvider
 from .providers.ollama import OllamaProvider
 from .providers.openai import OpenAIProvider
@@ -47,6 +49,10 @@ def get_provider(provider_type: str, model_name: str, api_key: str | None = None
         return AnthropicProvider(model=model_name, api_key=api_key)
     elif pt == "openai":
         return OpenAIProvider(model=model_name, api_key=api_key)
+    elif pt == "gemini":
+        return GeminiProvider(model=model_name, api_key=api_key)
+    elif pt == "deepseek":
+        return DeepSeekProvider(model=model_name, api_key=api_key)
     elif pt == "ollama":
         return OllamaProvider(model=model_name)
     return MockProvider(model=model_name)
@@ -353,30 +359,46 @@ def serve(
 @app.command()
 def export(
     run_id: Annotated[str, typer.Argument(help="Run ID to export")],
-    output: Annotated[str, typer.Option("--output", "-o", help="Output HTML file path")] = "report.html",
+    output: Annotated[str, typer.Option("--output", "-o", help="Output file path")] = "report.html",
+    fmt: Annotated[str, typer.Option("--format", "-f", help="Format: html, mermaid, otel, jsonl")] = "html",
     storage: Annotated[str, typer.Option("--storage", help="Path to runs directory")] = ".harness/runs",
 ):
-    """Export a run as a standalone portable HTML report with embedded Cytoscape.js DAG."""
+    """Export a run as a standalone report (HTML, Mermaid flowchart, OpenTelemetry trace, or JSONL dataset)."""
     storage_path = Path(storage).resolve()
     dag = load_run(run_id, storage_path)
     if not dag:
         console.print(f"[red]Error: Run '{run_id}' not found.[/red]")
         raise typer.Exit(code=1)
 
-    from .export.report import generate_html_report
+    from .export.report import (
+        generate_html_report,
+        generate_jsonl_dataset,
+        generate_mermaid_diagram,
+        generate_otel_trace,
+    )
     out_path = Path(output).resolve()
-    generate_html_report(dag, out_path)
-    console.print(f"[bold green]Report exported successfully to: [cyan]{out_path}[/cyan][/bold green]")
+    fmt_lower = fmt.lower()
+    if fmt_lower in ("mermaid", "mmd"):
+        generate_mermaid_diagram(dag, out_path)
+    elif fmt_lower in ("otel", "opentelemetry"):
+        generate_otel_trace(dag, out_path)
+    elif fmt_lower == "jsonl":
+        generate_jsonl_dataset(dag, out_path)
+    else:
+        generate_html_report(dag, out_path)
+
+    console.print(f"[bold green]Exported ({fmt}) successfully to: [cyan]{out_path}[/cyan][/bold green]")
 
 
 @app.command(name="report")
 def report(
     run_id: Annotated[str, typer.Argument(help="Run ID to generate report for")],
     output: Annotated[str, typer.Option("--output", "-o", help="Output HTML file path")] = "report.html",
+    fmt: Annotated[str, typer.Option("--format", "-f", help="Format: html, mermaid, otel, jsonl")] = "html",
     storage: Annotated[str, typer.Option("--storage", help="Path to runs directory")] = ".harness/runs",
 ):
-    """Alias for 'export': Generate a standalone HTML audit report."""
-    export(run_id=run_id, output=output, storage=storage)
+    """Alias for 'export': Generate a standalone report or trace."""
+    export(run_id=run_id, output=output, fmt=fmt, storage=storage)
 
 
 @app.command(name="eval")

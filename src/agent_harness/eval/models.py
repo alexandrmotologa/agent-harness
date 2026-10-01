@@ -8,10 +8,13 @@ class AssertionType(StrEnum):
     FILE_EXISTS = "file_exists"
     FILE_CONTAINS = "file_contains"
     FILE_NOT_CONTAINS = "file_not_contains"
+    REGEX_MATCH = "regex_match"
     MAX_STEPS = "max_steps"
     MAX_COST_USD = "max_cost_usd"
     TOOL_INVOKED = "tool_invoked"
     ANSWER_CONTAINS = "answer_contains"
+    EXIT_CODE = "exit_code"
+    STDERR_EMPTY = "stderr_empty"
 
 
 class EvalAssertion(BaseModel):

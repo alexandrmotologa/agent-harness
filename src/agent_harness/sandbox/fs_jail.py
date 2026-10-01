@@ -7,6 +7,26 @@ from pydantic import BaseModel, Field
 
 from .base import SecurityViolationError
 
+DEFAULT_IGNORE_DIRS = {
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".harness",
+    "snapshots",
+    "node_modules",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+}
+
+DEFAULT_IGNORE_EXTENSIONS = {
+    ".pyc",
+    ".pyo",
+    ".pyd",
+    ".lock",
+}
+
 
 class FileDiff(BaseModel):
     created: list[str] = Field(default_factory=list)
@@ -24,7 +44,12 @@ def hash_file(file_path: Path) -> str:
 
 
 class FilesystemJail:
-    def __init__(self, workspace_dir: Path, snapshot_storage_dir: Path | None = None):
+    def __init__(
+        self,
+        workspace_dir: Path,
+        snapshot_storage_dir: Path | None = None,
+        ignore_dirs: set[str] | None = None,
+    ):
         self.workspace_dir = workspace_dir.resolve()
         self.workspace_dir.mkdir(parents=True, exist_ok=True)
         self.snapshot_dir = (
@@ -33,6 +58,7 @@ class FilesystemJail:
             else self.workspace_dir.parent / "snapshots"
         )
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        self.ignore_dirs = ignore_dirs if ignore_dirs is not None else DEFAULT_IGNORE_DIRS
 
     def resolve_safe_path(self, relative_path: str | Path) -> Path:
         """
@@ -48,11 +74,24 @@ class FilesystemJail:
             ) from exc
         return target
 
+    def should_ignore(self, rel_path: str) -> bool:
+        parts = rel_path.split("/")
+        if any(part in self.ignore_dirs for part in parts):
+            return True
+        if any(rel_path.endswith(ext) for ext in DEFAULT_IGNORE_EXTENSIONS):
+            return True
+        return False
+
     def scan_workspace(self) -> dict[str, str]:
         """Scan workspace and return mapping of relative file paths to SHA-256 hashes."""
         fingerprints: dict[str, str] = {}
-        for root, _, files in os.walk(self.workspace_dir):
+        for root, dirs, files in os.walk(self.workspace_dir):
+            # Prune ignored directories in-place during walk
+            dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
+
             for filename in files:
+                if any(filename.endswith(ext) for ext in DEFAULT_IGNORE_EXTENSIONS):
+                    continue
                 full_path = Path(root) / filename
                 rel_path = str(full_path.relative_to(self.workspace_dir)).replace("\\", "/")
                 try:
@@ -77,7 +116,7 @@ class FilesystemJail:
         )
 
     def save_snapshot(self, snapshot_id: str) -> dict[str, str]:
-        """Save a snapshot of the workspace to the snapshot storage vault."""
+        """Save an optimized snapshot of the workspace."""
         target_dir = self.snapshot_dir / snapshot_id
         if target_dir.exists():
             shutil.rmtree(target_dir)
@@ -98,18 +137,25 @@ class FilesystemJail:
         if not source_dir.exists():
             raise FileNotFoundError(f"Snapshot '{snapshot_id}' not found in '{self.snapshot_dir}'")
 
-        # Clean current workspace files
+        # Clean current workspace files (skipping ignored directories)
         for root, dirs, files in os.walk(self.workspace_dir, topdown=False):
+            dirs[:] = [d for d in dirs if d not in self.ignore_dirs]
             for f in files:
-                try:
-                    (Path(root) / f).unlink()
-                except OSError:
-                    pass
+                full_f = Path(root) / f
+                rel_f = str(full_f.relative_to(self.workspace_dir)).replace("\\", "/")
+                if not self.should_ignore(rel_f):
+                    try:
+                        full_f.unlink()
+                    except OSError:
+                        pass
             for d in dirs:
-                try:
-                    (Path(root) / d).rmdir()
-                except OSError:
-                    pass
+                full_d = Path(root) / d
+                rel_d = str(full_d.relative_to(self.workspace_dir)).replace("\\", "/")
+                if not self.should_ignore(rel_d):
+                    try:
+                        full_d.rmdir()
+                    except OSError:
+                        pass
 
         # Copy snapshot files back
         for root, _, files in os.walk(source_dir):

@@ -56,12 +56,14 @@ AgentHarness addresses these issues by isolating all tool executions in sandboxe
 
 ## Key Capabilities
 
-- Zero-trust execution: tools execute inside a WebAssembly runtime, an ephemeral non-root Docker container, or an isolated local process jail with copy-on-write path restrictions.
+- Zero-trust execution: tools execute inside a WebAssembly runtime, an ephemeral non-root Docker container, or an isolated local process jail with copy-on-write path restrictions and process-tree termination.
 - Immutable decision DAG: every thought, tool call, and observation is saved with a SHA-256 cryptographic hash calculated from its parent and payload.
 - Time-travel debugging: rewind execution to step N, modify the agent prompt or tool output, and branch into a new execution line without losing previous runs.
-- Guardrails and cost circuit breakers: automatic detection of repetitive tool calls with identical parameters, paired with configurable token spend limits.
-- Dual inspection interfaces: an interactive terminal UI built with Textual, plus a browser dashboard powered by FastAPI and Cytoscape.js.
-- Provider adapters: support for Anthropic Claude, OpenAI, local Ollama models, and an offline mock provider for deterministic tests.
+- Guardrails and cost circuit breakers: automatic detection of repetitive tool calls with identical parameters, paired with configurable token spend limits across frontier models.
+- Dual inspection interfaces: an interactive terminal UI built with Textual, plus a real-time browser dashboard powered by FastAPI, WebSockets, and Cytoscape.js.
+- Provider adapters: native support for Anthropic Claude, OpenAI, Google Gemini, DeepSeek, local Ollama models, and an offline mock provider.
+- Multi-format observability & exports: export decision DAGs as interactive HTML reports, Mermaid workflow diagrams (`.mmd`), OpenTelemetry traces (`.json`), or fine-tuning / DPO datasets (`.jsonl`).
+- Parallel evaluation suite: benchmark agent reliability with concurrency and declarative assertions (`file_exists`, `file_contains`, `regex_match`, `exit_code`, `stderr_empty`, `tool_invoked`, `max_steps`).
 
 ## Installation
 
@@ -88,11 +90,24 @@ Run a goal using the default local process sandbox and mock provider:
 agent-harness run "Calculate prime numbers up to 50 and write them to primes.txt" --provider mock --sandbox process
 ```
 
-To use Anthropic Claude or OpenAI models, supply your API key:
+To use frontier cloud models, supply your API key:
 
 ```bash
+# Anthropic Claude
 export ANTHROPIC_API_KEY="your-api-key"
 agent-harness run "Analyze src/auth.py and write unit tests" --provider anthropic --model claude-3-7-sonnet
+
+# OpenAI GPT-4o / o3-mini
+export OPENAI_API_KEY="your-api-key"
+agent-harness run "Refactor database migrations" --provider openai --model gpt-4o
+
+# Google Gemini
+export GEMINI_API_KEY="your-api-key"
+agent-harness run "Audit security policies" --provider gemini --model gemini-2.5-flash
+
+# DeepSeek
+export DEEPSEEK_API_KEY="your-api-key"
+agent-harness run "Benchmark async IO" --provider deepseek --model deepseek-chat
 ```
 
 ### Inspecting Runs
@@ -127,6 +142,7 @@ Keyboard shortcuts:
 - `b`: Fork selected step into a new branch
 - `s`: View sandbox stdout and stderr logs
 - `d`: View file diff produced by selected step
+- `r`: Refresh DAG state
 - `q`: Quit
 
 ### Web Decision Graph Studio
@@ -137,23 +153,38 @@ Launch the local web visualizer to inspect DAG trajectories and branch points in
 agent-harness serve --port 8000
 ```
 
-Open `http://localhost:8000` to interact with the Cytoscape.js decision graph, inspect tool call arguments, token spend, and trigger time-travel rewinds directly from the browser UI.
+Open `http://localhost:8000` to interact with the Cytoscape.js decision graph, trigger new runs in real time via WebSockets, inspect tool call arguments, token spend, and execute time-travel rewinds directly from the browser UI.
 
 <p align="center">
   <img src="docs/images/web_studio_dag.png?raw=true" alt="AgentHarness Web Studio" width="96%" style="border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" />
 </p>
 
-### Standalone HTML Audit Reports
+### Multi-Format Observability & Reports
 
-Generate self-contained, zero-dependency HTML audit reports with interactive graph exploration, metric cards, and step inspection to share with team members or attach to CI/CD pipelines:
+Export decision trajectories for auditing, documentation, observability pipelines, or training datasets:
 
 ```bash
-agent-harness report <run-id> --output report.html
+# Interactive Standalone HTML Report
+agent-harness export <run-id> --format html --output report.html
+
+# Mermaid Flowchart Diagram (.mmd)
+agent-harness export <run-id> --format mermaid --output trajectory.mmd
+
+# OpenTelemetry Trace Spans (.otel.json)
+agent-harness export <run-id> --format otel --output trace.json
+
+# Fine-Tuning & DPO Conversational Dataset (.jsonl)
+agent-harness export <run-id> --format jsonl --output dataset.jsonl
 ```
 
-<p align="center">
-  <img src="docs/images/standalone_report.png?raw=true" alt="AgentHarness Standalone Report" width="96%" style="border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" />
-</p>
+### Automated Benchmark & Evaluation Suite
+
+Run parallel evaluation test suites against agent implementations with declarative assertions and step/cost budgets:
+
+```bash
+# Run eval suite in parallel
+agent-harness eval benchmarks/eval_suite.json --concurrency 4
+```
 
 ### Deterministic & Fuzzy Cassette Replay
 

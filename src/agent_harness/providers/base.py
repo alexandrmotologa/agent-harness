@@ -25,9 +25,11 @@ class BaseProvider(ABC):
         self.base_url = base_url
 
     def format_tools(self, tool_registry: Any) -> list[dict[str, Any]]:
-        """Format tools from ToolRegistry for this provider."""
+        """Format tools from ToolRegistry or tool list for this provider."""
         if hasattr(tool_registry, "to_anthropic_tools"):
             return tool_registry.to_anthropic_tools()
+        if isinstance(tool_registry, (list, tuple)):
+            return [t.to_anthropic() if hasattr(t, "to_anthropic") else t for t in tool_registry]
         return []
 
     @abstractmethod

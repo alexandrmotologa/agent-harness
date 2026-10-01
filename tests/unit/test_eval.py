@@ -70,3 +70,78 @@ async def test_eval_runner_suite_execution():
     assert report.passed_cases == 1
     assert report.failed_cases == 0
     assert report.results[0].passed
+
+
+@pytest.mark.asyncio
+async def test_eval_new_assertions_and_concurrency():
+    provider = MockProvider(
+        responses=[
+            LLMResponse(
+                content="Writing data to code.py",
+                tool_calls=[
+                    LLMToolCall(
+                        id="c1",
+                        name="write_file",
+                        arguments={"path": "code.py", "content": "print('VERSION=2.4.1')\n"},
+                    )
+                ],
+            ),
+            LLMResponse(
+                content="Executing code.py",
+                tool_calls=[
+                    LLMToolCall(
+                        id="c2",
+                        name="execute_command",
+                        arguments={"command": "python -c \"print('VERSION=2.4.1')\""},
+                    )
+                ],
+            ),
+            LLMResponse(
+                content="Completed.",
+                tool_calls=[
+                    LLMToolCall(
+                        id="c3",
+                        name="finish_task",
+                        arguments={"answer": "Done. Output matched version pattern."},
+                    )
+                ],
+            ),
+        ]
+    )
+
+    suite = EvalSuite(
+        name="Advanced Assertions Suite",
+        cases=[
+            EvalTestCase(
+                id="case_adv_1",
+                name="Regex and exit code verification",
+                goal="Check python script output",
+                assertions=[
+                    EvalAssertion(
+                        assertion_type=AssertionType.REGEX_MATCH,
+                        target="code.py",
+                        expected=r"VERSION=\d+\.\d+\.\d+",
+                    ),
+                    EvalAssertion(
+                        assertion_type=AssertionType.EXIT_CODE,
+                        expected=0,
+                    ),
+                    EvalAssertion(
+                        assertion_type=AssertionType.STDERR_EMPTY,
+                    ),
+                    EvalAssertion(
+                        assertion_type=AssertionType.ANSWER_CONTAINS,
+                        expected="version pattern",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    runner = EvalRunner(provider=provider)
+    report = await runner.run_suite(suite, concurrency=2)
+
+    assert report.total_cases == 1
+    assert report.passed_cases == 1
+    assert report.failed_cases == 0
+    assert report.results[0].passed

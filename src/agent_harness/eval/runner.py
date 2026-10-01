@@ -1,3 +1,5 @@
+import asyncio
+import re
 import shutil
 import tempfile
 import time
@@ -76,6 +78,15 @@ class EvalRunner:
                     passed = True
                     msg = f"File '{ass.target}' does not exist"
 
+            elif ass.assertion_type == AssertionType.REGEX_MATCH:
+                try:
+                    content = sandbox.read_file(ass.target) if ass.target else run_res.final_answer
+                    passed = bool(re.search(str(ass.expected), content))
+                    msg = f"Pattern r'{ass.expected}' {'matched' if passed else 'did not match'}"
+                except Exception as exc:
+                    passed = False
+                    msg = f"Regex error on '{ass.target}': {exc}"
+
             elif ass.assertion_type == AssertionType.MAX_STEPS:
                 passed = run_res.steps_taken <= int(ass.expected)
                 msg = f"Steps: {run_res.steps_taken} (max: {ass.expected})"
@@ -96,6 +107,20 @@ class EvalRunner:
             elif ass.assertion_type == AssertionType.ANSWER_CONTAINS:
                 passed = str(ass.expected).lower() in run_res.final_answer.lower()
                 msg = f"Answer {'contains' if passed else 'does not contain'} '{ass.expected}'"
+
+            elif ass.assertion_type == AssertionType.STDERR_EMPTY:
+                observations = [
+                    n.payload.get("output", "")
+                    for n in loop.dag.nodes_by_id.values()
+                    if n.node_type == NodeType.OBSERVATION
+                ]
+                has_error = any("Error:" in str(o) or "Traceback" in str(o) for o in observations)
+                passed = not has_error
+                msg = "Stderr/errors absent" if passed else "Execution generated errors"
+
+            elif ass.assertion_type == AssertionType.EXIT_CODE:
+                passed = run_res.success == (int(ass.expected) == 0)
+                msg = f"Exit code {'matched' if passed else 'mismatched'}"
 
             if not passed:
                 all_passed = False
@@ -123,16 +148,19 @@ class EvalRunner:
             error=run_res.error_message,
         )
 
-    async def run_suite(self, suite: EvalSuite) -> EvalSuiteReport:
-        results: list[TestCaseResult] = []
-        total_cost = 0.0
-        total_duration = 0.0
+    async def run_suite(self, suite: EvalSuite, concurrency: int = 4) -> EvalSuiteReport:
+        sem = asyncio.Semaphore(concurrency)
 
-        for case in suite.cases:
-            res = await self.run_case(case)
-            results.append(res)
-            total_cost += res.cost_usd
-            total_duration += res.duration_seconds
+        async def _bounded_run(c: EvalTestCase) -> TestCaseResult:
+            async with sem:
+                return await self.run_case(c)
+
+        start_time = time.perf_counter()
+        results: list[TestCaseResult] = await asyncio.gather(
+            *[_bounded_run(case) for case in suite.cases]
+        )
+        total_duration = time.perf_counter() - start_time
+        total_cost = sum(r.cost_usd for r in results)
 
         passed_count = sum(1 for r in results if r.passed)
         failed_count = len(results) - passed_count

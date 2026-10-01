@@ -14,6 +14,8 @@ from ..core.loop import AutonomousLoop
 from ..engine.debugger import TimeTravelDebugger
 from ..graph.decision_dag import DecisionDAG
 from ..providers.anthropic import AnthropicProvider
+from ..providers.deepseek import DeepSeekProvider
+from ..providers.gemini import GeminiProvider
 from ..providers.mock import MockProvider
 from ..providers.ollama import OllamaProvider
 from ..providers.openai import OpenAIProvider
@@ -54,6 +56,10 @@ def resolve_provider(provider_type: str, model_name: str):
         return AnthropicProvider(model=model_name)
     elif pt == "openai":
         return OpenAIProvider(model=model_name)
+    elif pt == "gemini":
+        return GeminiProvider(model=model_name)
+    elif pt == "deepseek":
+        return DeepSeekProvider(model=model_name)
     elif pt == "ollama":
         return OllamaProvider(model=model_name)
     return MockProvider(model=model_name)

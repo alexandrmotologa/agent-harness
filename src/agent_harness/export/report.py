@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 from ..graph.decision_dag import DecisionDAG, NodeType
 
@@ -152,3 +153,128 @@ def generate_html_report(dag: DecisionDAG, output_file: Path) -> Path:
     output_file.parent.mkdir(parents=True, exist_ok=True)
     output_file.write_text(html_content, encoding="utf-8")
     return output_file
+
+
+def generate_mermaid_diagram(dag: DecisionDAG, output_file: Path | None = None) -> str:
+    """Generate a clean Mermaid flowchart representation of the decision DAG."""
+    lines = ["flowchart TD"]
+
+    # Define nodes
+    for node in dag.nodes_by_id.values():
+        safe_title = (node.title or node.node_type.value).replace('"', "'").replace("\n", " ")
+        if len(safe_title) > 35:
+            safe_title = safe_title[:32] + "..."
+        node_class = node.node_type.value.lower()
+        lines.append(f'    {node.id}["#{node.step_index} {safe_title}"]:::{node_class}')
+
+    lines.append("")
+
+    # Define edges
+    for u, v in dag.graph.edges():
+        lines.append(f"    {u} --> {v}")
+
+    lines.append("")
+    # Add CSS classes
+    lines.append("    classDef goal fill:#06b6d4,stroke:#0891b2,color:#ffffff,stroke-width:2px")
+    lines.append("    classDef thought fill:#2563eb,stroke:#3b82f6,color:#ffffff,stroke-width:2px")
+    lines.append("    classDef tool_call fill:#ca8a04,stroke:#eab308,color:#ffffff,stroke-width:2px")
+    lines.append("    classDef observation fill:#059669,stroke:#10b981,color:#ffffff,stroke-width:2px")
+    lines.append("    classDef final_answer fill:#047857,stroke:#34d399,color:#ffffff,stroke-width:3px")
+    lines.append("    classDef intervention fill:#7c3aed,stroke:#a855f7,color:#ffffff,stroke-width:2px")
+    lines.append("    classDef error fill:#dc2626,stroke:#ef4444,color:#ffffff,stroke-width:2px")
+
+    diagram_text = "\n".join(lines)
+    if output_file:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_text(diagram_text, encoding="utf-8")
+    return diagram_text
+
+
+def generate_otel_trace(dag: DecisionDAG, output_file: Path | None = None) -> dict[str, Any]:
+    """Export the DAG trajectory into an OpenTelemetry JSON Trace representation."""
+    import hashlib
+
+    trace_id = hashlib.md5(dag.run_id.encode("utf-8")).hexdigest()
+    spans = []
+
+    for node in dag.nodes_by_id.values():
+        span_id = hashlib.md5(node.id.encode("utf-8")).hexdigest()[:16]
+        parent_span_id = (
+            hashlib.md5(node.parent_ids[0].encode("utf-8")).hexdigest()[:16]
+            if node.parent_ids
+            else None
+        )
+
+        span = {
+            "traceId": trace_id,
+            "spanId": span_id,
+            "parentSpanId": parent_span_id,
+            "name": f"AgentStep: {node.title or node.node_type.value}",
+            "kind": "SPAN_KIND_INTERNAL",
+            "attributes": {
+                "agent.run_id": dag.run_id,
+                "agent.step_index": node.step_index,
+                "agent.branch_id": node.branch_id,
+                "agent.node_type": node.node_type.value,
+                "agent.content_hash": node.content_hash,
+                "agent.token_usage": node.token_usage,
+                "agent.cost_usd": node.cost_usd,
+                "agent.checkpoint_id": node.checkpoint_id or "",
+            },
+            "status": {
+                "code": "STATUS_CODE_ERROR" if node.node_type == NodeType.ERROR else "STATUS_CODE_OK"
+            },
+        }
+        spans.append(span)
+
+    trace_data = {
+        "resourceSpans": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": "AgentHarness"}},
+                        {"key": "agent.goal", "value": {"stringValue": dag.goal}},
+                    ]
+                },
+                "scopeSpans": [{"spans": spans}],
+            }
+        ]
+    }
+
+    if output_file:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_text(json.dumps(trace_data, indent=2), encoding="utf-8")
+
+    return trace_data
+
+
+def generate_jsonl_dataset(dag: DecisionDAG, output_file: Path | None = None) -> list[dict[str, Any]]:
+    """Export decision trajectories as conversational dataset samples for fine-tuning / DPO."""
+    records = []
+    for branch in dag.list_branches():
+        nodes = [n for n in dag.nodes_by_id.values() if n.branch_id == branch]
+        conversation = [{"role": "system", "content": "You are an autonomous AI agent."}]
+        conversation.append({"role": "user", "content": f"Goal: {dag.goal}"})
+
+        for n in nodes:
+            if n.node_type == NodeType.THOUGHT:
+                conversation.append({"role": "assistant", "content": n.payload.get("thought", "")})
+            elif n.node_type == NodeType.OBSERVATION:
+                conversation.append({"role": "tool", "content": str(n.payload.get("output", ""))})
+            elif n.node_type == NodeType.FINAL_ANSWER:
+                conversation.append({"role": "assistant", "content": n.payload.get("answer", "")})
+
+        records.append({
+            "run_id": dag.run_id,
+            "branch_id": branch,
+            "goal": dag.goal,
+            "messages": conversation,
+        })
+
+    if output_file:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, "w", encoding="utf-8") as f:
+            for r in records:
+                f.write(json.dumps(r) + "\n")
+
+    return records

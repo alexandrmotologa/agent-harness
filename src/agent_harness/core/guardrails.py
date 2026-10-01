@@ -26,6 +26,11 @@ MODEL_COST_PER_MILLION_TOKENS: dict[str, tuple[float, float]] = {
     "claude-3-haiku": (0.25, 1.25),
     "gpt-4o": (5.00, 15.00),
     "gpt-4o-mini": (0.15, 0.60),
+    "gemini-2.5-flash": (0.10, 0.40),
+    "gemini-2.5-pro": (1.25, 5.00),
+    "gemini-1.5-flash": (0.075, 0.30),
+    "deepseek-chat": (0.14, 0.28),
+    "deepseek-reasoner": (0.55, 2.19),
     "mock": (0.0, 0.0),
     "ollama": (0.0, 0.0),
 }
