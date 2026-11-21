@@ -44,6 +44,10 @@ AgentHarness is a deterministic execution runtime for autonomous AI agents that 
                               +-------------------------------+
 ```
 
+<p align="center">
+  <img src="docs/images/agent_harness_demo.gif?raw=true" alt="AgentHarness Multi-Agent Runtime and Decision DAG Demo" width="100%" style="border-radius: 12px; box-shadow: 0 16px 36px rgba(0,0,0,0.4);" />
+</p>
+
 ## Why AgentHarness Exists
 
 Giving an autonomous language model direct access to your host shell or unconstrained file write APIs creates three practical problems:
@@ -176,6 +180,10 @@ agent-harness export <run-id> --format otel --output trace.json
 # Fine-Tuning & DPO Conversational Dataset (.jsonl)
 agent-harness export <run-id> --format jsonl --output dataset.jsonl
 ```
+
+<p align="center">
+  <img src="docs/images/standalone_report.png?raw=true" alt="AgentHarness Standalone HTML Audit Report" width="96%" style="border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);" />
+</p>
 
 ### Automated Benchmark & Evaluation Suite
 

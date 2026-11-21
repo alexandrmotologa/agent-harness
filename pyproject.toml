@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-harness"
-version = "0.1.0"
+version = "0.1.1"
 description = "Sandboxed multi-agent runtime and time-travel inspector with zero-trust execution and immutable decision DAGs"
 readme = "README.md"
 license = "MIT"
@@ -62,6 +62,7 @@ packages = ["src/agent_harness"]
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra -q --asyncio-mode=auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 pythonpath = ["src"]
 

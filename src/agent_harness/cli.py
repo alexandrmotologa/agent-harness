@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from . import __version__
 from .config import GuardrailConfig, HarnessConfig, ProviderType, SandboxConfig, SandboxType
 from .core.loop import AutonomousLoop
 from .core.tool_registry import ToolRegistry
@@ -32,6 +33,35 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def version_callback(value: bool) -> None:
+    if value:
+        console.print(f"[bold cyan]AgentHarness[/bold cyan] v{__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool | None,
+        typer.Option(
+            "--version",
+            "-v",
+            callback=version_callback,
+            is_eager=True,
+            help="Show version and exit.",
+        ),
+    ] = None,
+) -> None:
+    """AgentHarness: Sandboxed multi-agent runtime and time-travel inspector."""
+    pass
+
+
+@app.command()
+def version() -> None:
+    """Show AgentHarness version information."""
+    console.print(f"[bold cyan]AgentHarness[/bold cyan] v{__version__}")
 
 
 def get_sandbox(sandbox_type: str, workspace_dir: Path):

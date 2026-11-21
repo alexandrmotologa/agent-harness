@@ -53,3 +53,24 @@ def test_cli_replay_help():
     res = runner.invoke(app, ["replay", "--help"])
     assert res.exit_code == 0
     assert "Replay previously recorded" in res.stdout
+
+
+def test_cli_version():
+    res = runner.invoke(app, ["version"])
+    assert res.exit_code == 0
+    assert "AgentHarness" in res.stdout
+    assert "v0.1.1" in res.stdout
+
+
+def test_cli_version_flag():
+    res = runner.invoke(app, ["--version"])
+    assert res.exit_code == 0
+    assert "AgentHarness" in res.stdout
+    assert "v0.1.1" in res.stdout
+
+
+def test_cli_short_version_flag():
+    res = runner.invoke(app, ["-v"])
+    assert res.exit_code == 0
+    assert "AgentHarness" in res.stdout
+    assert "v0.1.1" in res.stdout
